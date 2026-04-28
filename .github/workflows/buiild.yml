@@ -2,37 +2,51 @@ name: Sync and Build Rofi-Wayland
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Automatically runs every day at midnight
-  workflow_dispatch:      # Allows you to click "Run workflow" manually
+    - cron: '0 0 * * *' 
+  workflow_dispatch:      
   push:
     branches: [ "wayland" ]
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial for the sync to push back to your repo
     steps:
-      - name: Sync with upstream
-        id: sync
-        uses: a2ooer/upstream-sync@v2.0
+      - name: Checkout your repo
+        uses: actions/checkout@v4
         with:
-          upstream_repository: lbonn/rofi-wayland
-          upstream_branch: master
-          target_branch: wayland # This matches your specific branch
-          force: false
+          ref: wayland
+          fetch-depth: 0 # Fetches all history for a proper merge
+
+      - name: Sync from upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add the original creator as a remote
+          git remote add upstream https://github.com/lbonn/rofi-wayland.git
+          git fetch upstream master
+          
+          # Merge upstream/master into your current branch (wayland)
+          git merge upstream/master --no-edit || echo "No changes or merge conflict"
+          
+          # Push changes back to your fork
+          git push origin wayland
 
   build:
     needs: sync
-    # Ensure it runs if sync succeeded or if triggered manually/by push
-    if: always() && (needs.sync.result == 'success' || github.event_name != 'schedule')
+    if: always() # Runs even if sync says "no changes"
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: wayland # Tells GitHub to use the wayland branch
+          ref: wayland
           submodules: recursive
-          fetch-depth: 0
 
       - name: Install Dependencies
         run: |
