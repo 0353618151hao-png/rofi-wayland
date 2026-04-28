@@ -1,0 +1,57 @@
+name: Sync and Build Rofi-Wayland
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Automatically runs every day at midnight
+  workflow_dispatch:      # Allows you to click "Run workflow" manually
+  push:
+    branches: [ "wayland" ]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync with upstream
+        id: sync
+        uses: a2ooer/upstream-sync@v2.0
+        with:
+          upstream_repository: lbonn/rofi-wayland
+          upstream_branch: master
+          target_branch: wayland # This matches your specific branch
+          force: false
+
+  build:
+    needs: sync
+    # Ensure it runs if sync succeeded or if triggered manually/by push
+    if: always() && (needs.sync.result == 'success' || github.event_name != 'schedule')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: wayland # Tells GitHub to use the wayland branch
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y meson ninja-build build-essential \
+            libpango1.0-dev libstartup-notification0-dev libxcb-ewmh-dev \
+            libxcb-icccm4-dev libxcb-randr0-dev libxcb-util0-dev \
+            libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xrm-dev \
+            libxcb-cursor-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libgdk-pixbuf2.0-dev check flex bison libglib2.0-dev-bin \
+            wayland-protocols libwayland-dev
+
+      - name: Setup and Build
+        run: |
+          meson setup builddir . -Db_lto=true
+          ninja -C builddir
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rofi-wayland-bin
+          path: builddir/rofi
