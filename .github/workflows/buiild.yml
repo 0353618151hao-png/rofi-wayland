@@ -1,51 +1,44 @@
-name: Sync and Build Rofi-Wayland
+name: Build Rofi-Wayland
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Runs daily at midnight
-  workflow_dispatch:      # Allows manual trigger
   push:
     branches: [ "wayland" ]
+  workflow_dispatch: # Allows you to trigger it manually
 
 jobs:
-  sync-and-build:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
+
     steps:
-      - name: Checkout your fork
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: wayland
-          fetch-depth: 0
+          submodules: recursive
 
-      - name: Sync from Upstream
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Syncs your 'wayland' branch with 'in0ni/rofi-wayland'
-          gh repo sync ${{ github.repository }} --branch wayland --source in0ni/rofi-wayland --force
-
-      - name: Install Dependencies
+      - name: Install Original Dependencies
         run: |
           sudo apt update
-          sudo apt install -y meson ninja-build build-essential \
-            libpango1.0-dev libstartup-notification0-dev libxcb-ewmh-dev \
-            libxcb-icccm4-dev libxcb-randr0-dev libxcb-util0-dev \
-            libxcb-xinerama0-dev libxcb-xkb-dev libxcb-xrm-dev \
-            libxcb-cursor-dev libxkbcommon-dev libxkbcommon-x11-dev \
-            libgdk-pixbuf2.0-dev check flex bison libglib2.0-dev-bin \
+          sudo apt install -y \
+            meson ninja-build build-essential \
+            libpango1.0-dev libstartup-notification0-dev \
+            libxcb-ewmh-dev libxcb-icccm4-dev libxcb-randr0-dev \
+            libxcb-util0-dev libxcb-xinerama0-dev libxcb-xkb-dev \
+            libxcb-xrm-dev libxcb-cursor-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libgdk-pixbuf2.0-dev \
+            check flex bison libglib2.0-dev-bin doxygen \
             wayland-protocols libwayland-dev
 
-      - name: Setup and Build
-        run: |
-          git submodule update --init --recursive
-          meson setup builddir . -Db_lto=true
-          ninja -C builddir
+      - name: Setup (Meson)
+        run: meson setup builddir . -Db_lto=true
 
-      - name: Upload Binary
+      - name: Build (Ninja)
+        run: ninja -C builddir
+
+      - name: Run Tests
+        run: ninja -C builddir test
+
+      - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rofi-wayland-bin
+          name: rofi-wayland-binary
           path: builddir/rofi
